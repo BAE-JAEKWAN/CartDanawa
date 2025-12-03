@@ -1,4 +1,4 @@
-import Tesseract from 'tesseract.js'
+import { createWorker } from 'tesseract.js'
 
 export interface OCRResult {
   text: string
@@ -10,11 +10,19 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
   try {
     const preprocessedImage = await preprocessImage(imageSrc)
 
-    const result = await Tesseract.recognize(preprocessedImage, 'kor+eng', {
+    console.log('Initializing Tesseract worker...')
+    const worker = await createWorker('kor+eng', 1, {
       logger: m => console.log(m),
     })
 
-    const text = result.data.text
+    console.log('Recognizing text...')
+    const {
+      data: { text },
+    } = await worker.recognize(preprocessedImage)
+
+    console.log('Raw OCR Text:', text)
+    await worker.terminate()
+
     const { price, productName } = parsePriceTag(text)
 
     return {
