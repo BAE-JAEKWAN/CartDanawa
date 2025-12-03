@@ -23,7 +23,8 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
     console.log('Raw OCR Text:', text)
     await worker.terminate()
 
-    const { price, productName } = parsePriceTag(text)
+    // Use Gemini API for parsing
+    const { price, productName } = await parseWithGemini(text)
 
     return {
       text,
@@ -81,6 +82,33 @@ async function preprocessImage(imageSrc: string): Promise<string> {
     img.onerror = reject
     img.src = imageSrc
   })
+}
+
+async function parseWithGemini(
+  text: string
+): Promise<{ price: number | null; productName: string | null }> {
+  try {
+    const response = await fetch('/api/parse', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+    })
+
+    if (!response.ok) {
+      throw new Error('API request failed')
+    }
+
+    const data = await response.json()
+    return {
+      price: data.price,
+      productName: data.productName,
+    }
+  } catch (error) {
+    console.error('Gemini Parsing Failed, falling back to regex:', error)
+    return parsePriceTag(text) // Fallback to local regex if API fails
+  }
 }
 
 function parsePriceTag(text: string): {
