@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import Webcam from 'react-webcam'
 import { Button } from './ui/Button'
 import { X } from 'lucide-react'
@@ -17,21 +17,35 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const webcamRef = useRef<Webcam>(null)
   const [isCameraReady, setIsCameraReady] = useState(false)
 
-  const capture = useCallback(() => {
-    const imageSrc = webcamRef.current?.getScreenshot()
-    if (imageSrc) {
-      onCapture(imageSrc)
+  // Auto-capture every 1000ms
+  React.useEffect(() => {
+    let interval: NodeJS.Timeout
+
+    if (isCameraReady) {
+      interval = setInterval(() => {
+        const imageSrc = webcamRef.current?.getScreenshot()
+        if (imageSrc) {
+          onCapture(imageSrc)
+        }
+      }, 1000)
     }
-  }, [webcamRef, onCapture])
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isCameraReady, onCapture])
 
   const videoConstraints = {
-    facingMode: 'environment', // Use back camera on mobile
+    facingMode: 'environment',
   }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex justify-end p-4">
+      <div className="absolute top-0 left-0 right-0 z-10 flex justify-between p-4 bg-linear-to-b from-black/50 to-transparent">
+        <div className="text-white font-medium px-2 py-1 bg-black/30 rounded backdrop-blur-sm">
+          Auto-Scanning...
+        </div>
         <Button
           variant="ghost"
           size="icon"
@@ -56,27 +70,19 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
         {/* Scanning Overlay Guide */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-64 w-64 border-2 border-white/50 rounded-lg relative">
+          <div className="h-64 w-64 border-2 border-white/50 rounded-lg relative animate-pulse">
             <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white"></div>
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-white"></div>
             <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-white"></div>
             <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white"></div>
+
+            {/* Scanning Line Animation */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
           </div>
-          <p className="absolute mt-80 text-white/80 text-sm font-medium bg-black/50 px-3 py-1 rounded-full">
-            Align price tag here
+          <p className="absolute mt-80 text-white/90 text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-md">
+            Point at a price tag
           </p>
         </div>
-      </div>
-
-      {/* Footer Controls */}
-      <div className="bg-black p-8 flex justify-center pb-12">
-        <Button
-          onClick={capture}
-          disabled={!isCameraReady}
-          className="h-20 w-20 rounded-full border-4 border-white bg-transparent p-1 hover:bg-white/10 disabled:opacity-50"
-        >
-          <div className="h-full w-full rounded-full bg-white" />
-        </Button>
       </div>
     </div>
   )
