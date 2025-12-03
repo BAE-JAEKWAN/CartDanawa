@@ -36,10 +36,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   }, [isCameraReady, onCapture])
 
   const videoConstraints = {
-    facingMode: "environment",
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-  };
+    facingMode: 'environment',
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">

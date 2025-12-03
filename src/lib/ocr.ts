@@ -8,8 +8,6 @@ export interface OCRResult {
 
 export async function processImage(imageSrc: string): Promise<OCRResult> {
   try {
-    const preprocessedImage = await preprocessImage(imageSrc)
-
     console.log('Initializing Tesseract worker...')
     const worker = await createWorker('kor+eng', 1, {
       logger: m => console.log(m),
@@ -18,7 +16,7 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
     console.log('Recognizing text...')
     const {
       data: { text },
-    } = await worker.recognize(preprocessedImage)
+    } = await worker.recognize(imageSrc)
 
     console.log('Raw OCR Text:', text)
     await worker.terminate()
@@ -35,53 +33,6 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
     console.error('OCR Error:', error)
     return { text: '', price: null, productName: null }
   }
-}
-
-// Image Preprocessing: Grayscale + High Contrast
-async function preprocessImage(imageSrc: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve(imageSrc)
-        return
-      }
-
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const data = imageData.data
-
-      // Contrast factor (0-255). 50 is a good starting point.
-      const contrast = 50
-      const factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
-
-      for (let i = 0; i < data.length; i += 4) {
-        // Grayscale
-        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-
-        // Apply Contrast
-        const newColor = factor * (gray - 128) + 128
-
-        // Clamp to 0-255
-        const final = Math.max(0, Math.min(255, newColor))
-
-        data[i] = final // R
-        data[i + 1] = final // G
-        data[i + 2] = final // B
-        // Alpha (data[i+3]) remains unchanged
-      }
-
-      ctx.putImageData(imageData, 0, 0)
-      resolve(canvas.toDataURL('image/jpeg'))
-    }
-    img.onerror = reject
-    img.src = imageSrc
-  })
 }
 
 async function parseWithGemini(

@@ -16,9 +16,6 @@ export const TotalBar = () => {
             {total.toLocaleString()}원
           </p>
         </div>
-        <button className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-colors">
-          Checkout
-        </button>
       </div>
     </div>
   )
