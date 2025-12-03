@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import { Button } from './ui/Button'
 import { X } from 'lucide-react'
@@ -18,7 +18,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [isCameraReady, setIsCameraReady] = useState(false)
 
   // Auto-capture every 1000ms
-  React.useEffect(() => {
+  useEffect(() => {
     let interval: NodeJS.Timeout
 
     if (isCameraReady) {

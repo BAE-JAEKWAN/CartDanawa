@@ -1,4 +1,4 @@
-import { createWorker } from 'tesseract.js'
+import { createWorker, PSM } from 'tesseract.js'
 
 export interface OCRResult {
   text: string
@@ -13,6 +13,11 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
       logger: m => console.log(m),
     })
 
+    // Optimize Tesseract settings
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK, // PSM 6: Assume a single uniform block of text
+    })
+
     console.log('Recognizing text...')
     const {
       data: { text },
@@ -21,8 +26,11 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
     console.log('Raw OCR Text:', text)
     await worker.terminate()
 
-    // Use Gemini API for parsing
-    const { price, productName } = await parseWithGemini(text)
+    // Temporarily disabled: Use Gemini API for parsing
+    // const { price, productName } = await parseWithGemini(text)
+
+    // Use local regex parsing for speed
+    const { price, productName } = parsePriceTag(text)
 
     return {
       text,
