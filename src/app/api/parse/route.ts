@@ -1,20 +1,28 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextResponse } from 'next/server'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-
 export async function POST(req: Request) {
   try {
     const { text } = await req.json()
 
+    console.log('=== Gemini API Request ===')
+    console.log('API Key exists:', !!process.env.GEMINI_API_KEY)
+    console.log(
+      'API Key first 10 chars:',
+      process.env.GEMINI_API_KEY?.substring(0, 10)
+    )
+    console.log('Text length:', text?.length)
+
     if (!process.env.GEMINI_API_KEY) {
+      console.error('GEMINI_API_KEY is not set!')
       return NextResponse.json(
         { error: 'GEMINI_API_KEY is not set' },
         { status: 500 }
       )
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `
     You are a smart shopping assistant. 
@@ -38,17 +46,30 @@ export async function POST(req: Request) {
     """
     `
 
+    console.log('Calling Gemini API...')
     const result = await model.generateContent(prompt)
     const response = await result.response
     const textResponse = response.text()
+
+    console.log('Gemini response:', textResponse)
 
     // Clean up markdown code blocks if present
     const jsonString = textResponse.replace(/```json|```/g, '').trim()
     const data = JSON.parse(jsonString)
 
+    console.log('Parsed data:', data)
     return NextResponse.json(data)
   } catch (error) {
-    console.error('Gemini API Error:', error)
+    console.error('=== Gemini API Error ===')
+    console.error(
+      'Error type:',
+      error instanceof Error ? error.constructor.name : typeof error
+    )
+    console.error(
+      'Error message:',
+      error instanceof Error ? error.message : String(error)
+    )
+    console.error('Full error:', error)
     return NextResponse.json({ error: 'Failed to parse text' }, { status: 500 })
   }
 }
