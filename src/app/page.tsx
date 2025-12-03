@@ -54,6 +54,9 @@ export default function Home() {
 
           // Optional: Vibrate device
           if (navigator.vibrate) navigator.vibrate(200)
+
+          // Close camera after successful scan
+          setIsScanning(false)
         }
       }
     } catch (error) {
