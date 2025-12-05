@@ -36,6 +36,8 @@ export default function Home() {
 
     try {
       const result = await processImage(imageSrc)
+      console.log('imageSrc:', imageSrc)
+      console.log('OCR Result:', result)
 
       if (result.price) {
         const now = Date.now()

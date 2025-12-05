@@ -27,10 +27,10 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
     await worker.terminate()
 
     // Temporarily disabled: Use Gemini API for parsing
-    // const { price, productName } = await parseWithGemini(text)
+    const { price, productName } = await parseWithGemini(text)
 
     // Use local regex parsing for speed
-    const { price, productName } = parsePriceTag(text)
+    // const { price, productName } = parsePriceTag(text)
 
     return {
       text,
