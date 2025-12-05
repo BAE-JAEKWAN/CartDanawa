@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import { Button } from './ui/Button'
 import { X } from 'lucide-react'
@@ -21,7 +21,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const isProcessingRef = useRef(false)
 
   // Capture high-resolution image directly from video element and crop to overlay
-  const captureHighResImage = () => {
+  const captureHighResImage = useCallback(() => {
     const video = webcamRef.current?.video
     const videoContainer = videoContainerRef.current
     const overlay = overlayRef.current
@@ -73,7 +73,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
     // console.log(`Captured: ${Math.round(cropW)}x${Math.round(cropH)} from ${videoW}x${videoH}`)
     return canvas.toDataURL('image/jpeg', 0.9)
-  }
+  }, [])
 
   // Auto-capture every 1000ms
   useEffect(() => {
@@ -103,7 +103,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isCameraReady, onCapture])
+  }, [isCameraReady, onCapture, captureHighResImage])
 
   const videoConstraints = {
     facingMode: 'environment',

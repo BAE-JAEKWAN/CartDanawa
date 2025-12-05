@@ -3,15 +3,12 @@ import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const { text } = await req.json()
+    const { text, image } = await req.json()
 
     console.log('=== Gemini API Request ===')
     console.log('API Key exists:', !!process.env.GEMINI_API_KEY)
-    console.log(
-      'API Key first 10 chars:',
-      process.env.GEMINI_API_KEY?.substring(0, 10)
-    )
     console.log('Text length:', text?.length)
+    console.log('Image provided:', !!image)
 
     if (!process.env.GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not set!')
@@ -24,27 +21,51 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
-    const prompt = `
+    let prompt = []
+
+    const commonInstructions = `
     You are a smart shopping assistant. 
-    Extract the "Product Name" and "Price" from the following OCR text.
-    The text might be messy, contain random characters, or be a mix of Korean and English.
+    Extract the "Product Name" and "Price" from the provided input (image or text).
     
     Rules:
     1. **Price**: Look for the largest number that likely represents a price (e.g., 4830, 10000). Ignore small numbers like "100g", "1등급".
     2. **Product Name**: Look for the main product description (e.g., "한우 등심", "서울우유"). Ignore "Price", "Discount", "Origin".
-    3. **Correction**: Fix obvious OCR typos (e.g., "한우 둥심" -> "한우 등심").
+    3. **Correction**: Fix obvious typos if the input is text.
     
     Return ONLY a JSON object with this format:
     {
       "productName": "string",
       "price": number
     }
-    
-    OCR Text:
-    """
-    ${text}
-    """
     `
+
+    if (image) {
+      // Image input (Vision)
+      // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+      const base64Data = image.split(',')[1] || image
+
+      prompt = [
+        commonInstructions,
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: 'image/jpeg',
+          },
+        },
+      ]
+    } else {
+      // Text input (Legacy/Fallback)
+      prompt = [
+        `
+        ${commonInstructions}
+        
+        OCR Text:
+        """
+        ${text}
+        """
+        `,
+      ]
+    }
 
     console.log('Calling Gemini API...')
     const result = await model.generateContent(prompt)

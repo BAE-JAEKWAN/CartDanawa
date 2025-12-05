@@ -1,4 +1,4 @@
-import { createWorker, PSM } from 'tesseract.js'
+// import { createWorker, PSM } from 'tesseract.js'
 
 export interface OCRResult {
   text: string
@@ -8,32 +8,13 @@ export interface OCRResult {
 
 export async function processImage(imageSrc: string): Promise<OCRResult> {
   try {
-    console.log('Initializing Tesseract worker...')
-    const worker = await createWorker('kor+eng', 1, {
-      logger: m => console.log(m),
-    })
+    console.log('Processing image with Gemini Vision...')
 
-    // Optimize Tesseract settings
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK, // PSM 6: Assume a single uniform block of text
-    })
-
-    console.log('Recognizing text...')
-    const {
-      data: { text },
-    } = await worker.recognize(imageSrc)
-
-    console.log('Raw OCR Text:', text)
-    await worker.terminate()
-
-    // Temporarily disabled: Use Gemini API for parsing
-    const { price, productName } = await parseWithGemini(text)
-
-    // Use local regex parsing for speed
-    // const { price, productName } = parsePriceTag(text)
+    // Bypass Tesseract and use Gemini Vision directly
+    const { price, productName } = await parseWithGemini(undefined, imageSrc)
 
     return {
-      text,
+      text: 'Gemini Vision', // Placeholder text
       price,
       productName,
     }
@@ -44,7 +25,8 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
 }
 
 async function parseWithGemini(
-  text: string
+  text?: string,
+  image?: string
 ): Promise<{ price: number | null; productName: string | null }> {
   try {
     const response = await fetch('/api/parse', {
@@ -52,7 +34,7 @@ async function parseWithGemini(
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, image }),
     })
 
     if (!response.ok) {
@@ -66,7 +48,7 @@ async function parseWithGemini(
     }
   } catch (error) {
     console.error('Gemini Parsing Failed, falling back to regex:', error)
-    return parsePriceTag(text) // Fallback to local regex if API fails
+    return parsePriceTag(text || '') // Fallback to local regex if API fails
   }
 }
 
