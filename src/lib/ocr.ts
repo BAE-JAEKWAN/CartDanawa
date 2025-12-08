@@ -1,5 +1,3 @@
-// import { createWorker, PSM } from 'tesseract.js'
-
 export interface OCRResult {
   text: string
   price: number | null
@@ -10,11 +8,10 @@ export async function processImage(imageSrc: string): Promise<OCRResult> {
   try {
     console.log('Processing image with Gemini Vision...')
 
-    // Bypass Tesseract and use Gemini Vision directly
     const { price, productName } = await parseWithGemini(undefined, imageSrc)
 
     return {
-      text: 'Gemini Vision', // Placeholder text
+      text: 'Gemini Vision',
       price,
       productName,
     }
