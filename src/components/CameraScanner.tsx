@@ -1,12 +1,12 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import { Button } from './ui/Button'
-import { X } from 'lucide-react'
+import { X, Camera, Loader2 } from 'lucide-react'
 
 interface CameraScannerProps {
-  onCapture: (imageSrc: string) => void
+  onCapture: (imageSrc: string) => Promise<void>
   onClose: () => void
 }
 
@@ -18,7 +18,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const videoContainerRef = useRef<HTMLDivElement | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const [isCameraReady, setIsCameraReady] = useState(false)
-  const isProcessingRef = useRef(false)
+  const [isCapturing, setIsCapturing] = useState(false)
 
   // Capture high-resolution image directly from video element and crop to overlay
   const captureHighResImage = useCallback(() => {
@@ -71,39 +71,24 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     // Draw the cropped portion of the video to the canvas
     ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
 
-    // console.log(`Captured: ${Math.round(cropW)}x${Math.round(cropH)} from ${videoW}x${videoH}`)
     return canvas.toDataURL('image/jpeg', 0.9)
   }, [])
 
-  // Auto-capture every 1000ms
-  useEffect(() => {
-    let interval: NodeJS.Timeout
+  const handleManualCapture = async () => {
+    if (isCapturing || !isCameraReady) return
 
-    if (isCameraReady) {
-      interval = setInterval(() => {
-        // Avoid overlapping processing
-        if (isProcessingRef.current) return
+    const imageSrc = captureHighResImage()
+    if (!imageSrc) return
 
-        const imageSrc = captureHighResImage()
-        if (imageSrc) {
-          ;(async () => {
-            try {
-              isProcessingRef.current = true
-              onCapture(imageSrc)
-            } catch (err) {
-              console.error('Capture failed', err)
-            } finally {
-              isProcessingRef.current = false
-            }
-          })()
-        }
-      }, 1000)
+    try {
+      setIsCapturing(true)
+      await onCapture(imageSrc)
+    } catch (err) {
+      console.error('Capture failed', err)
+    } finally {
+      setIsCapturing(false)
     }
-
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isCameraReady, onCapture, captureHighResImage])
+  }
 
   const videoConstraints = {
     facingMode: 'environment',
@@ -116,7 +101,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-10 flex justify-between p-4 bg-linear-to-b from-black/50 to-transparent">
         <div className="text-white font-medium px-2 py-1 bg-black/30 rounded backdrop-blur-sm">
-          Auto-Scanning...
+          Manual Scan Mode
         </div>
         <Button
           variant="ghost"
@@ -147,20 +132,36 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div
             ref={overlayRef}
-            className="h-64 w-64 border-2 border-white/50 rounded-lg relative animate-pulse"
+            className="h-64 w-64 border-2 border-white/50 rounded-lg relative"
           >
             <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white"></div>
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-white"></div>
             <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-white"></div>
             <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white"></div>
-
-            {/* Scanning Line Animation */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
+            
+            {/* Remove the continuous scan animation for manual mode, or keep it as a guide */}
+            {/* <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div> */}
           </div>
           <p className="absolute mt-80 text-white/90 text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-md">
-            Point at a price tag
+            Align price tag & Tap button
           </p>
         </div>
+      </div>
+
+      {/* Footer / Shutter Button */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 p-8 flex justify-center bg-linear-to-t from-black/80 to-transparent">
+        <Button
+          size="icon"
+          className="h-20 w-20 rounded-full border-4 border-white bg-transparent hover:bg-white/20 active:bg-white/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={handleManualCapture}
+          disabled={!isCameraReady || isCapturing}
+        >
+          {isCapturing ? (
+            <Loader2 className="h-8 w-8 text-white animate-spin" />
+          ) : (
+            <div className="h-16 w-16 rounded-full bg-white" />
+          )}
+        </Button>
       </div>
     </div>
   )
