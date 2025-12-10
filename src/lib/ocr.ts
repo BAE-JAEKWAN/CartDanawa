@@ -1,157 +1,139 @@
-export interface OCRResult {
+// --- Types ---
+export type OCRResult = {
   text: string
   price: number | null
   productName: string | null
 }
 
-// --- Gemini throttling queue (module-scoped) ---
 type GeminiPayload = { text?: string; image?: string }
-type GeminiResult = { price: number | null; productName: string | null }
-type ApiParseResponse = { price?: number | null; productName?: string | null }
+type GeminiResponse = { price: number | null; productName: string | null }
 
-type GeminiQueueItem = {
-  payload: GeminiPayload
-  resolve: (value: GeminiResult) => void
+// ES2024: Promise.withResolvers 타입 정의 (혹시 환경에 없을 경우 대비)
+type PromiseController<T> = {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
   reject: (reason?: unknown) => void
 }
 
-const GEMINI_THROTTLE_MS = 1500 // ms between image requests
-const geminiQueue: GeminiQueueItem[] = []
-let geminiProcessing = false
-
-async function runGeminiQueue() {
-  if (geminiProcessing) return
-  geminiProcessing = true
-  while (geminiQueue.length > 0) {
-    const item = geminiQueue.shift()
-    if (!item) break
-    try {
-      const resp = await fetch('/api/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item.payload),
-      })
-      if (!resp.ok) throw new Error(`API request failed: ${resp.status}`)
-      const data: ApiParseResponse = await resp.json()
-      item.resolve({ price: data.price ?? null, productName: data.productName ?? null })
-    } catch (err) {
-      item.reject(err)
-    }
-    // throttle pause between image requests
-    await new Promise(r => setTimeout(r, GEMINI_THROTTLE_MS))
-  }
-  geminiProcessing = false
+type QueueItem = {
+  payload: GeminiPayload
+  promiseControls: PromiseController<GeminiResponse>
 }
 
-export async function processImage(imageSrc: string): Promise<OCRResult> {
-  try {
-    console.log('Processing image with Gemini Vision...')
+// --- Constants ---
+const GEMINI_THROTTLE_MS = 1500
+const MIN_PRICE = 100
 
-    const { price, productName } = await parseWithGemini(undefined, imageSrc)
+// --- 1. Queue Factory (Closure + Arrow Functions) ---
+const createThrottledQueue = (delayMs: number) => {
+  const queue: QueueItem[] = []
+  let isProcessing = false
 
-    return {
-      text: 'Gemini Vision',
-      price,
-      productName,
-    }
-  } catch (error) {
-    console.error('OCR Error:', error)
-    return { text: '', price: null, productName: null }
-  }
-}
+  // 내부 함수도 화살표 함수로 정의
+  const process = async () => {
+    if (isProcessing || queue.length === 0) return
+    isProcessing = true
 
-async function parseWithGemini(
-  text?: string,
-  image?: string
-): Promise<{ price: number | null; productName: string | null }> {
-  try {
-    const payload: GeminiPayload = { text, image }
+    while (queue.length > 0) {
+      const { payload, promiseControls } = queue.shift()!
 
-    // If an image is provided, enqueue the request to the throttled queue
-    // so that multiple rapid image-analysis calls won't overload the server
-    // or the Gemini model. Text-only requests are lightweight and sent
-    // immediately.
-    if (image) {
-      return new Promise((resolve, reject) => {
-        geminiQueue.push({
-          payload,
-          resolve: (res: GeminiResult) => resolve(res),
-          reject: (err: unknown) => reject(err),
-        })
-        // Start the queue runner if not already running
-        runGeminiQueue().catch(e => console.error('Gemini queue runner failed', e))
-      })
-    }
+      try {
+        const result = await fetchParseApi(payload)
+        promiseControls.resolve(result)
+      } catch (err) {
+        promiseControls.reject(err)
+      }
 
-    // Text-only: send immediately
-    const response = await fetch('/api/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!response.ok) throw new Error('API request failed')
-    const data: ApiParseResponse = await response.json()
-    return { price: data.price ?? null, productName: data.productName ?? null }
-  } catch (error) {
-    console.error('Gemini Parsing Failed, falling back to regex:', error)
-    return parsePriceTag(text || '')
-  }
-}
-
-function parsePriceTag(text: string): {
-  price: number | null
-  productName: string | null
-} {
-  // Clean up text
-  const lines = text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-
-  let price: number | null = null
-  let productName: string | null = null
-
-  // Regex for price: looks for numbers with optional commas, potentially ending with '원' or starting with currency symbol
-  // Examples: 10,000원, 10000, ₩10,000
-  const priceRegex = /([0-9,]+)\s*(원|₩)?/g
-
-  // Heuristic: The largest number found is likely the price (or the one explicitly marked with '원')
-  let maxNumber = 0
-
-  for (const line of lines) {
-    // Try to find price
-    const matches = line.matchAll(priceRegex)
-    for (const match of matches) {
-      const numberStr = match[1].replace(/,/g, '')
-      const number = parseInt(numberStr, 10)
-
-      if (!isNaN(number) && number > maxNumber) {
-        // Filter out small numbers that might be quantities or weights (e.g. 100g)
-        // Prices are usually > 100 in KRW
-        if (number > 100) {
-          maxNumber = number
-          price = number
-        }
+      if (queue.length > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
       }
     }
+    isProcessing = false
   }
 
-  // Heuristic: Product name is usually the longest line of text that is NOT the price
-  // This is very basic and will need refinement
-  let longestLine = ''
-  for (const line of lines) {
-    // Skip if line looks like a price
-    if (line.match(/[0-9,]+원?/) && line.replace(/[^0-9]/g, '').length > 3)
-      continue
+  // 외부 노출 함수
+  return (payload: GeminiPayload): Promise<GeminiResponse> => {
+    // ✨ ES2024: Promise.withResolvers 사용
+    const promiseControls = Promise.withResolvers<GeminiResponse>()
+    
+    queue.push({ payload, promiseControls })
+    process() // Trigger processing
 
-    if (line.length > longestLine.length) {
-      longestLine = line
-    }
+    return promiseControls.promise
   }
+}
 
-  if (longestLine) {
-    productName = longestLine
+// --- 2. API Fetcher (Arrow Function) ---
+const fetchParseApi = async (payload: GeminiPayload): Promise<GeminiResponse> => {
+  const res = await fetch('/api/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) throw new Error(`API Error: ${res.status}`)
+  
+  const data = await res.json() as Partial<GeminiResponse>
+  return { 
+    price: data.price ?? null, 
+    productName: data.productName ?? null 
   }
+}
 
-  return { price, productName }
+// --- 3. Parsing Logic (Arrow Function & Functional Chaining) ---
+const parsePriceTag = (text: string): GeminiResponse => {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const priceRegex = /([\d,]+)\s*(원|₩)?/g
+
+  // Implicit Return을 활용한 깔끔한 계산 로직
+  const maxPrice = lines
+    .flatMap(line => Array.from(line.matchAll(priceRegex)))
+    .map(match => Number(match[1].replace(/,/g, '')))
+    .filter(num => !Number.isNaN(num) && num > MIN_PRICE)
+    .reduce((max, curr) => Math.max(max, curr), 0)
+
+  const productName = lines
+    .filter(line => {
+      const numericPart = line.replace(/\D/g, '')
+      const isPriceLike = numericPart.length > 3 && /[\d,]+(원|₩)?/.test(line)
+      return !isPriceLike
+    })
+    .reduce((longest, curr) => (curr.length > longest.length ? curr : longest), '')
+
+  return {
+    price: maxPrice || null,
+    productName: productName || null,
+  }
+}
+
+// 큐 인스턴스 초기화
+const enqueueImageRequest = createThrottledQueue(GEMINI_THROTTLE_MS)
+
+// --- 4. Main Export (Arrow Function) ---
+export const processImage = async (imageSrc: string): Promise<OCRResult> => {
+  console.log('Processing with Gemini Vision...')
+
+  try {
+    const result = imageSrc
+      ? await enqueueImageRequest({ image: imageSrc })
+      : await fetchParseApi({ text: 'text-fallback' })
+
+    return { text: 'Gemini Vision', ...result }
+  } catch (error) {
+    console.error('OCR Error:', error)
+    return { text: '', ...parsePriceTag('') }
+  }
+}
+
+// --- Polyfill (ES2024 Support for older environments) ---
+if (typeof Promise.withResolvers === 'undefined') {
+  Promise.withResolvers = <T>() => {
+    let resolve!: (value: T | PromiseLike<T>) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
 }
