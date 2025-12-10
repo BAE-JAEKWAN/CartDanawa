@@ -124,7 +124,7 @@ export const processImage = async (imageSrc: string): Promise<OCRResult> => {
     console.error('OCR Error:', error)
 
     if (typeof window !== 'undefined') {
-      alert('이미지 분석에 실패했습니다. 가격표를 직접 확인해주세요.')
+      alert('이미지 분석에 실패했습니다. 잠시 후에 다시 시도해주세요.')
     }
 
     // 에러가 났더라도 앱이 죽지 않도록 빈 값이나 로컬 파싱 결과를 반환
