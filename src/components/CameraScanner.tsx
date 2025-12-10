@@ -92,8 +92,8 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
   const videoConstraints = {
     facingMode: 'environment',
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 1024 },
+    height: { ideal: 1024 },
   }
 
   return (

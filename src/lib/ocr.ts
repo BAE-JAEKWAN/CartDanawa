@@ -4,6 +4,45 @@ export interface OCRResult {
   productName: string | null
 }
 
+// --- Gemini throttling queue (module-scoped) ---
+type GeminiPayload = { text?: string; image?: string }
+type GeminiResult = { price: number | null; productName: string | null }
+type ApiParseResponse = { price?: number | null; productName?: string | null }
+
+type GeminiQueueItem = {
+  payload: GeminiPayload
+  resolve: (value: GeminiResult) => void
+  reject: (reason?: unknown) => void
+}
+
+const GEMINI_THROTTLE_MS = 1500 // ms between image requests
+const geminiQueue: GeminiQueueItem[] = []
+let geminiProcessing = false
+
+async function runGeminiQueue() {
+  if (geminiProcessing) return
+  geminiProcessing = true
+  while (geminiQueue.length > 0) {
+    const item = geminiQueue.shift()
+    if (!item) break
+    try {
+      const resp = await fetch('/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item.payload),
+      })
+      if (!resp.ok) throw new Error(`API request failed: ${resp.status}`)
+      const data: ApiParseResponse = await resp.json()
+      item.resolve({ price: data.price ?? null, productName: data.productName ?? null })
+    } catch (err) {
+      item.reject(err)
+    }
+    // throttle pause between image requests
+    await new Promise(r => setTimeout(r, GEMINI_THROTTLE_MS))
+  }
+  geminiProcessing = false
+}
+
 export async function processImage(imageSrc: string): Promise<OCRResult> {
   try {
     console.log('Processing image with Gemini Vision...')
@@ -26,26 +65,36 @@ async function parseWithGemini(
   image?: string
 ): Promise<{ price: number | null; productName: string | null }> {
   try {
+    const payload: GeminiPayload = { text, image }
+
+    // If an image is provided, enqueue the request to the throttled queue
+    // so that multiple rapid image-analysis calls won't overload the server
+    // or the Gemini model. Text-only requests are lightweight and sent
+    // immediately.
+    if (image) {
+      return new Promise((resolve, reject) => {
+        geminiQueue.push({
+          payload,
+          resolve: (res: GeminiResult) => resolve(res),
+          reject: (err: unknown) => reject(err),
+        })
+        // Start the queue runner if not already running
+        runGeminiQueue().catch(e => console.error('Gemini queue runner failed', e))
+      })
+    }
+
+    // Text-only: send immediately
     const response = await fetch('/api/parse', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text, image }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     })
-
-    if (!response.ok) {
-      throw new Error('API request failed')
-    }
-
-    const data = await response.json()
-    return {
-      price: data.price,
-      productName: data.productName,
-    }
+    if (!response.ok) throw new Error('API request failed')
+    const data: ApiParseResponse = await response.json()
+    return { price: data.price ?? null, productName: data.productName ?? null }
   } catch (error) {
     console.error('Gemini Parsing Failed, falling back to regex:', error)
-    return parsePriceTag(text || '') // Fallback to local regex if API fails
+    return parsePriceTag(text || '')
   }
 }
 
