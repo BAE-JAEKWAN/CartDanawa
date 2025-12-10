@@ -109,7 +109,8 @@ const parsePriceTag = (text: string): GeminiResponse => {
 // 큐 인스턴스 초기화
 const enqueueImageRequest = createThrottledQueue(GEMINI_THROTTLE_MS)
 
-// --- 4. Main Export (Arrow Function) ---
+// --- 4. Main Export ---
+// --- 4. Main Export ---
 export const processImage = async (imageSrc: string): Promise<OCRResult> => {
   console.log('Processing with Gemini Vision...')
 
@@ -121,6 +122,12 @@ export const processImage = async (imageSrc: string): Promise<OCRResult> => {
     return { text: 'Gemini Vision', ...result }
   } catch (error) {
     console.error('OCR Error:', error)
+
+    if (typeof window !== 'undefined') {
+      alert('이미지 분석에 실패했습니다. 가격표를 직접 확인해주세요.')
+    }
+
+    // 에러가 났더라도 앱이 죽지 않도록 빈 값이나 로컬 파싱 결과를 반환
     return { text: '', ...parsePriceTag('') }
   }
 }
