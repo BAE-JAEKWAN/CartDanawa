@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { CameraScanner } from '@/components/CameraScanner'
 import { Button } from '@/components/ui/Button'
-import { Camera } from 'lucide-react'
+import { Camera, ListPlus } from 'lucide-react'
 import { processImage } from '@/lib/ocr'
 import { useCartStore } from '@/lib/store'
 import { CartList } from '@/components/CartList'
@@ -68,6 +68,11 @@ export default function Home() {
     }
   }
 
+  const handleManualAdd = () => {
+    addItem('상품명', 0)
+    setToastMessage('Added: 0원')
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 bg-gray-50">
       {/* Toast Notification */}
@@ -91,7 +96,14 @@ export default function Home() {
           </div>
 
           {/* Floating Action Button for Scanning */}
-          <div className="fixed bottom-24 right-4 z-30">
+          <div className="fixed bottom-24 right-4 z-30 flex items-end gap-3">
+            <Button
+              size="icon"
+              className="h-14 w-14 rounded-full shadow-lg bg-gray-200 hover:bg-gray-300 text-gray-900"
+              onClick={handleManualAdd}
+            >
+              <ListPlus className="h-6 w-6" />
+            </Button>
             <Button
               size="icon"
               className="h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700"

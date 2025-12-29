@@ -138,9 +138,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-white"></div>
             <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-white"></div>
             <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white"></div>
-            
-            {/* Remove the continuous scan animation for manual mode, or keep it as a guide */}
-            {/* <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div> */}
           </div>
           <p className="absolute mt-80 text-white/90 text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-md">
             Align price tag & Tap button
