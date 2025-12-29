@@ -89,7 +89,7 @@ export default function Home() {
         <h1 className="text-2xl font-bold text-gray-900">Cart Danawa</h1>
       </header>
 
-      <div className="flex-1 w-full max-w-md flex flex-col items-center justify-center space-y-8">
+      <div className="flex-1 w-full max-w-md flex flex-col items-center space-y-8">
         <div className="w-full h-full flex flex-col">
           <div className="flex-1 overflow-y-auto">
             <CartList />
